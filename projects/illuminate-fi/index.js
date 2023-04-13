@@ -13,10 +13,17 @@ async function tvl(_, _b, _cb, { api, }) {
   })
 
   const calls = logs.map(i => ( { params: [i.underlying, +i.maturity]}))
-  const pools = await api.multiCall({ abi: 'function pools(address, uint256) view returns (address)', calls, target: market})
+  const pools = await api.multiCall({ abi: 'function pools(address, uint256) view returns (address)', calls, target: market })
   const baseTokens = await api.multiCall({ abi: 'address:baseToken', calls: pools })
   const sharesTokens = await api.multiCall({ abi: 'address:sharesToken', calls: pools })
   const ownerTokens = pools.map((v, i) => [[baseTokens[i], sharesTokens[i]], v])
+
+  // Add the value of the principal tokens in the pool
+  const principalTokens = await api.multiCall({ abi: 'address:fyToken', calls: pools })
+  const principalTokenPrices = await api.multiCall({ abi: 'function sellFYTokenPreview(uint256) view returns (uint256)', calls: pools })
+  const principalTokenDecimals = await api.multiCall({ abi: 'uint256:decimals', calls: pools })
+  principalTokens.forEach((v, i) => ownerTokens.push([(v * principalTokenPrices[i]) / 10**(principalTokenDecimals[i]), pools[i]]))
+
   return sumTokens2({ api, ownerTokens, })
 }
 
