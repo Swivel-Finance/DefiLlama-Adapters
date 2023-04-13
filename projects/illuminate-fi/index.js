@@ -11,14 +11,16 @@ async function tvl(_, _b, _cb, { api, }) {
     onlyArgs: true,
     fromBlock: 16973041,
   })
-
   const calls = createMarketLogs.map(i => ( { params: [i.underlying, +i.maturity]}))
   const pools = await api.multiCall({ abi: 'function pools(address, uint256) view returns (address)', calls, target: market })
+
+  // Get the TVL of the base (using the shares token balance)
   const baseTokens = await api.multiCall({ abi: 'address:baseToken', calls: pools })
   const sharesTokens = await api.multiCall({ abi: 'address:sharesToken', calls: pools })
   const ownerTokens = pools.map((v, i) => [[baseTokens[i], sharesTokens[i]], v])
-  
-  // Add the value of the principal tokens in the pool
+  const baseTvl = +(await sumTokens2({ api, ownerTokens, }))['ethereum:0xa354f35829ae975e850e23e9615b11da1b3dc4de'];
+
+  // Get the TVL of the PTs in the pool
   const principalTokens = await api.multiCall({ abi: 'address:fyToken', calls: pools })
   const principalTokenDecimals = await api.multiCall({ abi: 'uint256:decimals', calls: pools })
   const oneCalls = principalTokenDecimals.map(v => ( { params: [10**(+v)] } ) )
@@ -39,13 +41,10 @@ async function tvl(_, _b, _cb, { api, }) {
     ))
   )
 
-  
-  // sum up the balance held by the pools weighted by their current price
   var principalTokenTvl = 0 
   principalTokenBalances.forEach((balance, i) => principalTokenTvl += +balance * +principalTokenPrices[i] / 10**(+principalTokenDecimals[i]))
 
-  const baseTvl = +(await sumTokens2({ api, ownerTokens, }))['ethereum:0xa354f35829ae975e850e23e9615b11da1b3dc4de'];
-
+  // Combine the base and principal token TVLs
   const totalTvl = {
     'ethereum:0xa354f35829ae975e850e23e9615b11da1b3dc4de': baseTvl + principalTokenTvl
   }
